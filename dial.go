@@ -83,9 +83,9 @@ func Dial(ctx context.Context, target string, opts ...Option) (*grpc.ClientConn,
 	dialOpts = append(dialOpts,
 		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})))
 	if cfg.creds != nil {
-		creds, err := cfg.creds(ctx, target)
-		if err != nil {
-			return nil, fmt.Errorf("credentials for %s: %w", target, err)
+		creds, credErr := cfg.creds(ctx, target)
+		if credErr != nil {
+			return nil, fmt.Errorf("credentials for %s: %w", target, credErr)
 		}
 		dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(creds))
 	}

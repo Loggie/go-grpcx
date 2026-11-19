@@ -61,7 +61,7 @@ func (s *Server) GracefulStop() {
 }
 
 // SpanUnaryInterceptor adds RPC semantic-convention attributes (system, method, and
-// status code) to the server's request span
+// status code) to the server's request span.
 func SpanUnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		span := trace.SpanFromContext(ctx)
