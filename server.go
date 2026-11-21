@@ -26,8 +26,31 @@ type Server struct {
 	health *health.Server
 }
 
+// ServerOption configures NewServer.
+type ServerOption func(*serverConfig)
+
+type serverConfig struct {
+	unary  []grpc.UnaryServerInterceptor
+	stream []grpc.StreamServerInterceptor
+}
+
+// WithUnaryInterceptors appends unary interceptors.
+func WithUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) ServerOption {
+	return func(c *serverConfig) { c.unary = append(c.unary, interceptors...) }
+}
+
+// WithStreamInterceptors appends stream interceptors.
+func WithStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) ServerOption {
+	return func(c *serverConfig) { c.stream = append(c.stream, interceptors...) }
+}
+
 // NewServer builds a Server.
-func NewServer(interceptors ...grpc.UnaryServerInterceptor) *Server {
+func NewServer(opts ...ServerOption) *Server {
+	var cfg serverConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
+
 	server := grpc.NewServer(
 		opentelemetry.ServerOption(opentelemetry.Options{
 			MetricsOptions: opentelemetry.MetricsOptions{
@@ -38,8 +61,8 @@ func NewServer(interceptors ...grpc.UnaryServerInterceptor) *Server {
 				TextMapPropagator: otel.GetTextMapPropagator(),
 			},
 		}),
-		grpc.ChainUnaryInterceptor(
-			append([]grpc.UnaryServerInterceptor{SpanUnaryInterceptor()}, interceptors...)...),
+		grpc.ChainUnaryInterceptor(append([]grpc.UnaryServerInterceptor{SpanUnaryInterceptor()}, cfg.unary...)...),
+		grpc.ChainStreamInterceptor(append([]grpc.StreamServerInterceptor{SpanStreamInterceptor()}, cfg.stream...)...),
 	)
 
 	healthServer := health.NewServer()
@@ -77,6 +100,26 @@ func SpanUnaryInterceptor() grpc.UnaryServerInterceptor {
 				canonicalName(status.Code(err))))
 
 		return resp, err
+	}
+}
+
+// SpanStreamInterceptor adds RPC semantic-convention attributes (system, method, and
+// status code) to the server's span for a streaming RPC.
+func SpanStreamInterceptor() grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		span := trace.SpanFromContext(ss.Context())
+		span.SetAttributes(
+			semconv.RPCSystemNameGRPC,
+			semconv.RPCMethod(strings.TrimPrefix(info.FullMethod, "/")),
+		)
+
+		err := handler(srv, ss)
+
+		span.SetAttributes(
+			semconv.RPCResponseStatusCodeKey.String(
+				canonicalName(status.Code(err))))
+
+		return err
 	}
 }
 
