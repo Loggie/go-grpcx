@@ -3,7 +3,7 @@
 gRPC server and client helpers with OpenTelemetry.
 
 ```go
-s := grpcx.NewServer(extraInterceptors...)
+s := grpcx.NewServer(grpcx.WithUnaryInterceptors(u...), grpcx.WithStreamInterceptors(st...))
 examplepb.RegisterExampleServiceServer(s, impl)
 s.SetServing()
 go s.Serve(lis)
